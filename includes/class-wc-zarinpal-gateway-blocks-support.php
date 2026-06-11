@@ -43,6 +43,8 @@ final class WC_Zarinpal_Gateway_Blocks_Support extends AbstractPaymentMethodType
             'title'        => $this->get_setting( 'title' ),
             'description'  => $this->get_setting( 'description' ),
             'icon'         => plugin_dir_url( __DIR__ ) . 'assets/images/logo.svg',
+            'fee_payer'    => $this->get_setting( 'fee_payer' ),
+            'supports'     => array_filter( $this->gateway->supports, array( $this->gateway, 'supports' ) ),
         );
     }
 }

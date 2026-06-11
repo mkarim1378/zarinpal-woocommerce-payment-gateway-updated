@@ -1,5 +1,18 @@
 # تغییرات پلاگین ووکامرس زرین‌پال
 
+## نسخه 5.0.20 - تکمیل داده‌های ادغام با چک‌اوت بلاکی ووکامرس
+
+در `includes/class-wc-zarinpal-gateway-blocks-support.php`، متد
+`get_payment_method_data()` فقط `title`, `description` و `icon` را برمی‌گرداند،
+در حالی که `assets/js/index.js` (خط 32) از `ZP_settings.supports` برای تعیین
+`features` روش پرداخت در رجیستری بلاک‌ها استفاده می‌کند. در نتیجه در چک‌اوت
+بلاکی، قابلیت‌هایی مانند refunds/subscriptions ممکن بود به‌درستی برای این
+درگاه ثبت نشوند.
+
+**راه‌حل:** کلیدهای `fee_payer` و `supports` (با همان منطق
+`array_filter($this->gateway->supports, ...)`) به خروجی `get_payment_method_data()`
+اضافه شدند.
+
 ## نسخه 5.0.19 - رفع دو باگ در تایید پرداخت و استرداد وجه
 
 ### مشکل ۱: کد بازگشتی 101 (تراکنش قبلاً تایید شده) به‌عنوان شکست تلقی می‌شد
