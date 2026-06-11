@@ -100,19 +100,14 @@ function Load_ZarinPal_Gateway() {
                     add_action('admin_bar_menu', array($this, 'add_sandbox_notice_to_admin_bar'), 100);
                 }
                 add_action('admin_notices', array($this, 'admin_notice_missing_merchantcode'));
-                add_action('admin_notices', array($this, 'admin_notice_missing_accesstoken'));
-                
+
                 add_action('woocommerce_cart_calculate_fees', array($this, 'add_zarinpal_fee_to_cart'));
-                add_action('woocommerce_checkout_update_order_meta', array($this, 'save_fee_to_order'));
                 add_action('woocommerce_checkout_update_order_review', array($this, 'update_checkout_fees'));
                 add_action('woocommerce_store_api_register_endpoint_data', array($this, 'register_store_api_data'));
                 add_action('woocommerce_store_api_checkout_update_order_from_request', array($this, 'blocks_add_fee'), 10, 2);
                 add_action('woocommerce_checkout_create_order', array($this, 'checkout_create_order_fee'), 10, 2);
-                add_action('woocommerce_blocks_checkout_order_processed', array($this, 'blocks_order_processed'), 10, 1);
                 add_action('woocommerce_store_api_cart_update_customer', array($this, 'blocks_payment_method_changed'), 10, 1);
                 add_filter('woocommerce_get_price_decimals', array($this, 'adjust_decimals_for_zarinpal_fee'), 10, 1);
-                
-                add_action('wp_head', array($this, 'add_cart_css'));
 
             }
             public function init_form_fields() {
@@ -588,11 +583,6 @@ function Load_ZarinPal_Gateway() {
                     echo '</div>';
                 }
             }
-            public function admin_notice_missing_accesstoken() {
-                $accesstoken = $this->get_option('access_token');
-                if (empty($accesstoken) && 'yes' === $this->get_option('enabled')) {
-                }
-            }
             private function sanitize_access_token($token) {
                 if (strpos($token, 'Bearer ') === 0) {
                     return substr($token, 7);
@@ -859,12 +849,6 @@ function Load_ZarinPal_Gateway() {
                 }
             }
             
-            public function save_fee_to_order($order_id) {
-                $order = wc_get_order($order_id);
-                if ($order && $order->get_payment_method() === $this->id && $this->feePayer === 'customer') {
-                }
-            }
-            
             public function checkout_create_order_fee($order, $data) {
                 if (isset($data['payment_method']) && $data['payment_method'] === $this->id && $this->feePayer === 'customer') {
                     $existing_fees = $order->get_fees();
@@ -956,12 +940,6 @@ function Load_ZarinPal_Gateway() {
                 }
             }
             
-            public function blocks_order_processed($order) {
-                if ($order->get_payment_method() === $this->id && $this->feePayer === 'customer') {
-                    $fees = $order->get_fees();
-                }
-            }
-            
             public function blocks_payment_method_changed($customer) {
                 if (WC()->cart && $this->feePayer === 'customer') {
                     WC()->cart->calculate_fees();
@@ -997,26 +975,6 @@ function Load_ZarinPal_Gateway() {
                 }
             }
             
-            public function add_fee_notice() {
-                $chosen_payment_method = WC()->session->get('chosen_payment_method');
-                if ($chosen_payment_method === $this->id && $this->feePayer === 'customer') {
-                    echo '<div class="woocommerce-info zarinpal-fee-notice" style="margin-bottom: 15px;">';
-                    echo '<p>' . __('با انتخاب درگاه زرین‌پال، کارمزد تراکنش به مبلغ سفارش اضافه می‌شود.', WC_ZPAL_TEXT_DOMAIN) . '</p>';
-                    echo '</div>';
-                }
-            }
-            
-                        public function enqueue_zarinpal_scripts() {
-                if (is_checkout() || is_cart()) {
-                    wp_enqueue_script('jquery');
-                }
-            }
-            
-            public function add_cart_css() {
-                return;
-            }
-            
-
             public function adjust_decimals_for_zarinpal_fee($decimals) {
                 if ((is_checkout() || is_cart() || wp_doing_ajax()) && $this->feePayer === 'customer') {
                     $chosen_payment_method = WC()->session ? WC()->session->get('chosen_payment_method') : '';
@@ -1074,48 +1032,6 @@ add_action('plugins_loaded', 'Load_ZarinPal_Gateway', 11);
 
 add_action('wp_ajax_get_zarinpal_fee', 'zarinpal_ajax_get_fee');
 add_action('wp_ajax_nopriv_get_zarinpal_fee', 'zarinpal_ajax_get_fee');
-
-add_action('wp_ajax_zarinpal_update_payment_method', 'zarinpal_update_payment_method');
-add_action('wp_ajax_nopriv_zarinpal_update_payment_method', 'zarinpal_update_payment_method');
-
-function zarinpal_update_payment_method() {
-    $payment_method = sanitize_text_field($_POST['payment_method'] ?? '');
-    $nonce = sanitize_text_field($_POST['nonce'] ?? '');
-    
-    $nonce_valid = false;
-    if (check_ajax_referer('update_order_review', 'nonce', false)) {
-        $nonce_valid = true;
-    } elseif ($nonce === 'zarinpal_checkout_nonce') {
-        $nonce_valid = true;
-    }
-    
-    if (!$nonce_valid) {
-        wp_send_json_error(array('message' => 'Security check failed'));
-        return;
-    }
-    
-    if (WC()->session) {
-        $old_method = WC()->session->get('chosen_payment_method');
-        WC()->session->set('chosen_payment_method', $payment_method);
-        
-        if (WC()->cart) {
-            $cart_fees = WC()->cart->get_fees();
-            foreach ($cart_fees as $fee_key => $fee) {
-                if (strpos($fee->name, 'کارمزد درگاه') !== false) {
-                    unset(WC()->cart->fees[$fee_key]);
-                }
-            }
-            
-            WC()->cart->calculate_fees();
-            WC()->cart->calculate_totals();
-        }
-    }
-    
-    wp_send_json_success(array(
-        'payment_method' => $payment_method,
-        'cart_total' => WC()->cart ? WC()->cart->get_total('') : 0
-    ));
-}
 
 function zarinpal_ajax_get_fee() {
     if (!check_ajax_referer('zarinpal_fee_nonce', 'nonce', false)) {
@@ -1360,6 +1276,7 @@ function zpal_manual_verify_transaction() {
     if (!current_user_can('manage_woocommerce')) {
         wp_die(__('شما دسترسی لازم برای انجام این عملیات را ندارید.', WC_ZPAL_TEXT_DOMAIN));
     }
+    check_ajax_referer('zpal_manual_verify', 'nonce');
     $order_id = isset($_POST['order_id']) ? intval($_POST['order_id']) : 0;
     if (!$order_id) {
         wp_die(__('سفارش یافت نشد.', WC_ZPAL_TEXT_DOMAIN));
@@ -1447,7 +1364,7 @@ function zpal_manual_verify_button($order) {
                 var btn = $(this);
                 btn.prop('disabled', true);
                 $('#zpal-manual-verify-result').html('<div class="notice notice-info is-dismissible"><p><?php echo esc_js(__('در حال بررسی تراکنش...', WC_ZPAL_TEXT_DOMAIN)); ?></p></div>');
-                $.post(ajaxurl, { action: 'zpal_manual_verify', order_id: <?php echo intval($order_id); ?> }, function(response) {
+                $.post(ajaxurl, { action: 'zpal_manual_verify', order_id: <?php echo intval($order_id); ?>, nonce: '<?php echo esc_js(wp_create_nonce('zpal_manual_verify')); ?>' }, function(response) {
                     $('#zpal-manual-verify-result').html(response);
                     btn.prop('disabled', false);
                 });

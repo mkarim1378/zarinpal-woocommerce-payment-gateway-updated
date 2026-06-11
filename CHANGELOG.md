@@ -1,5 +1,40 @@
 # تغییرات پلاگین ووکامرس زرین‌پال
 
+## نسخه 5.0.21 - رفع آسیب‌پذیری AJAX و حذف کدهای مرده/ناقص
+
+### مشکل ۴: اندپوینت AJAX ناامن و بلااستفاده
+متدهای `wp_ajax_zarinpal_update_payment_method` /
+`wp_ajax_nopriv_zarinpal_update_payment_method` و تابع
+`zarinpal_update_payment_method()` در کد فعلی `assets/js/index.js` فراخوانی
+نمی‌شدند، اما به‌صورت یک nonce ثابت و هاردکد (`zarinpal_checkout_nonce`)
+اعتماد می‌کردند که عملاً بررسی CSRF را دور می‌زد.
+
+**راه‌حل:** این اندپوینت بلااستفاده و ناامن به‌طور کامل حذف شد. اندپوینت
+فعال `wp_ajax_get_zarinpal_fee` / `wp_ajax_nopriv_get_zarinpal_fee` و تابع
+`zarinpal_ajax_get_fee()` بدون تغییر باقی ماندند.
+
+### مشکل ۵: عدم بررسی nonce در اعتبارسنجی دستی تراکنش
+اندپوینت `wp_ajax_zpal_manual_verify` (تابع `zpal_manual_verify_transaction`)
+فقط با `current_user_can('manage_woocommerce')` محافظت می‌شد و فاقد بررسی
+CSRF (nonce) بود.
+
+**راه‌حل:** در `zpal_manual_verify_button` یک nonce با
+`wp_create_nonce('zpal_manual_verify')` تولید و در درخواست AJAX ارسال می‌شود؛
+در `zpal_manual_verify_transaction` این nonce با
+`check_ajax_referer('zpal_manual_verify', 'nonce')` بررسی می‌شود.
+
+### 🧹 پاکسازی کدهای مرده/ناقص (کم‌خطر)
+موارد زیر که در هیچ‌جای کد فراخوانی یا استفاده نمی‌شدند حذف شدند:
+
+- اکشن‌های بلااستفاده در سازنده کلاس: `admin_notices` (تابع
+  `admin_notice_missing_accesstoken`)، `woocommerce_checkout_update_order_meta`
+  (تابع `save_fee_to_order`)، `woocommerce_blocks_checkout_order_processed`
+  (تابع `blocks_order_processed`) و `wp_head` (تابع `add_cart_css`)
+- توابع خالی/ناقص: `admin_notice_missing_accesstoken()`،
+  `save_fee_to_order($order_id)`، `blocks_order_processed($order)`
+- توابعی که هیچ‌جا hook نشده بودند: `add_fee_notice()`،
+  `enqueue_zarinpal_scripts()`، `add_cart_css()`
+
 ## نسخه 5.0.20 - تکمیل داده‌های ادغام با چک‌اوت بلاکی ووکامرس
 
 در `includes/class-wc-zarinpal-gateway-blocks-support.php`، متد
