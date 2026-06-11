@@ -439,10 +439,13 @@ function Load_ZarinPal_Gateway() {
                     
                     try {
                         $response = $this->zarinpal->verifyPayment($authority, $verify_amount);
-                        if ($response['code'] == 100) {
+                        if ($response['code'] == 100 || $response['code'] == 101) {
                             $transaction_id = $response['ref_id'];
                             $order->payment_complete($transaction_id);
-                            $order->add_order_note(sprintf(__('پرداخت با موفقیت انجام شد. کد رهگیری: %s', WC_ZPAL_TEXT_DOMAIN), $transaction_id));
+                            $note = ($response['code'] == 101)
+                                ? sprintf(__('این تراکنش قبلاً تایید شده بود. کد رهگیری: %s', WC_ZPAL_TEXT_DOMAIN), $transaction_id)
+                                : sprintf(__('پرداخت با موفقیت انجام شد. کد رهگیری: %s', WC_ZPAL_TEXT_DOMAIN), $transaction_id);
+                            $order->add_order_note($note);
                             wc_add_notice(str_replace('{transaction_id}', $transaction_id, $this->successMessage), 'success');
                             $woocommerce->cart->empty_cart();
                             wp_redirect($this->get_return_url($order));
@@ -498,11 +501,21 @@ function Load_ZarinPal_Gateway() {
                     return new WP_Error('no_authority', __('شناسه تراکنش زرین‌پال برای این سفارش یافت نشد.', WC_ZPAL_TEXT_DOMAIN));
                 }
                 try {
+                    $currency = strtolower($order->get_currency());
+                    $amount_in_rial = $amount;
+                    if ($currency === 'irht') {
+                        $amount_in_rial *= 10000;
+                    } elseif ($currency === 'irhr') {
+                        $amount_in_rial *= 1000;
+                    } elseif ($currency === 'irt') {
+                        $amount_in_rial *= 10;
+                    }
+
                     $transactions = $this->zarinpal->getTransactions($authority);
                     if (!empty($transactions)) {
                         $transaction_info = $transactions[0];
                         $transaction_id = $transaction_info['id'];
-                        $refund = $this->zarinpal->refundPayment($transaction_id, $amount * 10, $reason);
+                        $refund = $this->zarinpal->refundPayment($transaction_id, $amount_in_rial, $reason);
                         $order->add_order_note(sprintf(__('استرداد مبلغ %s انجام شد.', WC_ZPAL_TEXT_DOMAIN), wc_price($amount)));
                         return true;
                     } else {
@@ -1392,17 +1405,19 @@ function zpal_manual_verify_transaction() {
     
     try {
         $response = $zarinpal->verifyPayment($authority, $verify_amount);
-        if ($response['code'] == 100) {
+        if ($response['code'] == 100 || $response['code'] == 101) {
             $transaction_id = $response['ref_id'];
             if (!$order->is_paid()) {
                 $order->payment_complete($transaction_id);
             }
-            $order->add_order_note(sprintf(__('پرداخت با موفقیت انجام شد. کد رهگیری: %s', WC_ZPAL_TEXT_DOMAIN), $transaction_id));
-            $message = sprintf(__('پرداخت با موفقیت انجام شد. کد رهگیری: %s', WC_ZPAL_TEXT_DOMAIN), $transaction_id);
+            if ($response['code'] == 101) {
+                $order->add_order_note(sprintf(__('این تراکنش قبلاً تایید شده بود. کد رهگیری: %s', WC_ZPAL_TEXT_DOMAIN), $transaction_id));
+                $message = __('تراکنش قبلا وریفای شده است.', WC_ZPAL_TEXT_DOMAIN);
+            } else {
+                $order->add_order_note(sprintf(__('پرداخت با موفقیت انجام شد. کد رهگیری: %s', WC_ZPAL_TEXT_DOMAIN), $transaction_id));
+                $message = sprintf(__('پرداخت با موفقیت انجام شد. کد رهگیری: %s', WC_ZPAL_TEXT_DOMAIN), $transaction_id);
+            }
             echo '<div class="notice notice-success is-dismissible"><p>' . $message . '</p></div>';
-        } elseif ($response['code'] == 101) {
-            $message = __('تراکنش قبلا وریفای شده است.', WC_ZPAL_TEXT_DOMAIN);
-            echo '<div class="notice notice-info is-dismissible"><p>' . $message . '</p></div>';
         } else {
             throw new Exception('تراکنش ناموفق بود.');
         }
